@@ -1,0 +1,5 @@
+cron:
+- description: fetch tweets
+  url: /timeline
+  schedule: every 17 minutes
+  target: default
