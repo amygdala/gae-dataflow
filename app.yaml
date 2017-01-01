@@ -11,7 +11,7 @@ libraries:
   version: latest
 
 env_variables:
-  CONSUMER_KEY: 'Wxehs2dsKHffCwdUxkGSQ'
-  CONSUMER_SECRET: 'O92GZPWivt71elU6Ldv7EsWPQB0rPPKTfOat4yc7omQ'
-  ACCESS_TOKEN: '2768241-ATLbhBkDOl9hRvQS1WXhzXePqOTaLF1QP95un3MEgM'
-  ACCESS_TOKEN_SECRET: 'ZTZqCpadWmS8Uk0zdu6XRGX0ghRD5XPONSnjpvjwdU'
+  CONSUMER_KEY: 'xxxx'
+  CONSUMER_SECRET: 'xxxx'
+  ACCESS_TOKEN: 'xxxx'
+  ACCESS_TOKEN_SECRET: 'xxxx'
