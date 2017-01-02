@@ -1,0 +1,12 @@
+dispatch:
+  # ...
+  - url: "*/favicon.ico"
+    service: default
+
+  # ...
+  - url: "*/timeline*"
+    service: default
+
+  # ...
+  - url: "*/launchpipeline*"
+    service: backend
