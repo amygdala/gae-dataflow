@@ -77,9 +77,9 @@ class WordExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
       if ts_value:
         ts = ts_value.timestamp_value.seconds
-        logging.info("timestamp value: %s", ts)
+        # logging.info("timestamp value: %s", ts)
         if ts < days_ago:
-          logging.info("filtered out ts %s: lt %s", ts, days_ago)
+          # logging.info("filtered out ts %s: lt %s", ts, days_ago)
           return []
 
     words = re.findall(r'[A-Za-z\']+', text_line)
