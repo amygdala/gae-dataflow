@@ -40,6 +40,7 @@ import uuid
 from google.datastore.v1 import entity_pb2
 from google.datastore.v1 import query_pb2
 from googledatastore import helper as datastore_helper, PropertyFilter
+from googledatastore import Timestamp
 
 import apache_beam as beam
 from apache_beam import combiners
@@ -58,22 +59,29 @@ class WordExtractingDoFn(beam.DoFn):
   """Parse each line of input text into words."""
 
   def process(self, context):
-    """Returns an iterator over words in contents of Cloud Datastore entity.
-    The element is a line of text.  If the line is blank, note that, too.
-    Args:
-      context: the call-specific context: data and aggregator.
-    Returns:
-      The processed element.
+    """...
     """
+    import time
+
+    days_ago = int(time.time()) - 604800  # 60 * 60 * 24 * 7
+
     content_value = context.element.properties.get('text', None)
+    ts_value = context.element.properties.get('created_at', None)
     text_line = ''
     if content_value:
       text_line = content_value.string_value
+      if ts_value:
+        ts = ts_value.timestamp_value.seconds
+        # logging.info("timestamp value: %s", ts)
+        if ts < days_ago:
+          # logging.info("filtered out ts %s: lt %s", ts, days_ago)
+          return []
 
     words = re.findall(r'[A-Za-z\']+', text_line)
     stopwords = ['t', 'https', 'co', 'the', 'a', 'to', 'rt', 'and', 'in',
       'of', 'is', 'it', 's', 'at', 'on', 'for', 'that', 'by', 'are', 'amp',
       'an', 'so']
+    stopwords += list(map(chr, range(97, 123)))
     rwords = []
     for w in words:
       # weed out some 'stopwords'
@@ -85,12 +93,7 @@ class URLExtractingDoFn(beam.DoFn):
   """Parse each line of input text into words."""
 
   def process(self, context):
-    """Returns an iterator over words in contents of Cloud Datastore entity.
-    The element is a line of text.  If the line is blank, note that, too.
-    Args:
-      context: the call-specific context: data and aggregator.
-    Returns:
-      The processed element.
+    """...
     """
     url_content = context.element.properties.get('urls', None)
     if url_content:
@@ -125,15 +128,12 @@ class EntityWrapper(object):
 @app.route('/')
 def hello():
     """..."""
-    return 'nossing.'
+    return 'nothing to see.'
 
 @app.route('/launchpipeline')
 def launch():
+    # TODO: unhardwire
     project = 'aju-vtests3'
-    # python dts_twcount.py --project aju-vtests3 --kind Tweet
-    # --output gs://aju-vtests3-dataflow/output/twoutput --read_only --runner BlockingDataflowPipelineRunner
-    # --staging_location gs://aju-vtests3-dataflow/staging --temp_location gs://aju-vtests3-dataflow/temp
-    # --job_name aju-vtests3-twcount
     pipeline_options = {
         'project':
             'aju-vtests3',
@@ -146,33 +146,32 @@ def launch():
         'temp_location': 'gs://aju-vtests3-dataflow/temp'
     }
     read_from_datastore(project, PipelineOptions.from_dictionary(pipeline_options))
-    # empty_line_values = result.aggregated_values(empty_line_aggregator)
-    # logging.info('number of empty lines: %d', sum(empty_line_values.values()))
-    # word_length_values = result.aggregated_values(average_word_size_aggregator)
-    # logging.info('average word lengths: %s', word_length_values.values())
     print "returned from read_from_datastore"
 
     return 'Done.'
 
 def make_query(kind):
-    """Creates a Cloud Datastore ancestor query.
-
-    The returned query will fetch all the entities that have the parent key name
-    set to the given `ancestor`.
+    """Creates a Cloud Datastore query.
     """
-    # ancestor_key = entity_pb2.Key()
-    # datastore_helper.add_key_path(ancestor_key, kind, ancestor)
-    # if namespace is not None:
-    # ancestor_key.partition_id.namespace_id = namespace
 
-    days_ago = int(time.time()) - 604,800  # 60 * 60 * 24 * 7
+    # query = query_pb2.GqlQuery(
+      # query_string="select * from Tweet where created_at > %s" % days_ago)
 
     query = query_pb2.Query()
     query.kind.add().name = kind
 
-    datastore_helper.set_property_filter(
-      query.filter, 'created_at', PropertyFilter.GREATER_THAN,
-      days_ago)
+    # timestamp = Timestamp(seconds=days_ago, nanos=0)
+
+    # test_filter = query.filter.composite_filter.filters.add()
+    # test_filter.property_filter.op = PropertyFilter.GREATER_THAN
+    # test_filter.property_filter.property.name = 'created_at'
+    # # test_filter.property_filter.value.timestamp_value = timestamp
+    # test_filter.property_filter.value.timestamp_value.CopyFrom(timestamp)
+    # # upper_bound.property_filter.value.key_value.CopyFrom(next_key)
+
+    # datastore_helper.set_property_filter(
+      # query.filter, 'created_at', PropertyFilter.GREATER_THAN,
+      # days_ago)
 
     return query
 
@@ -197,7 +196,7 @@ def read_from_datastore(project, pipeline_options):
             | 'count' >> beam.Map(lambda (word, ones): (word, sum(ones)))
             | 'top 300' >> combiners.Top.Of(300, lambda x, y: x[1] < y[1])
             )
-
+  # Count the occurrences of each expanded url in the tweets
   url_counts = (lines
             | 'geturls' >> (beam.ParDo(URLExtractingDoFn())
                           .with_output_types(unicode))
