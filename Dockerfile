@@ -9,7 +9,7 @@ RUN curl https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud
 RUN ./google-cloud-sdk/install.sh -q
 RUN ./google-cloud-sdk/bin/gcloud components install beta
 
-RUN apt-get install -y emacs
+# RUN apt-get install -y emacs
 
 # Change the -p argument to use Python 2.7 if desired.
 # RUN virtualenv /env -p python2.7

@@ -31,10 +31,7 @@ import base64
 import datetime
 import logging
 import os
-# import tweepy
-# from tweepy import OAuthHandler
-
-# import webapp2
+import time
 
 import argparse
 import re
@@ -56,11 +53,6 @@ from flask import Flask
 
 app = Flask(__name__)
 
-# empty_line_aggregator = beam.Aggregator('emptyLines')
-# average_word_size_aggregator = beam.Aggregator('averageWordLength',
-#                                                beam.combiners.MeanCombineFn(),
-#                                                float)
-
 
 class WordExtractingDoFn(beam.DoFn):
   """Parse each line of input text into words."""
@@ -78,12 +70,16 @@ class WordExtractingDoFn(beam.DoFn):
     if content_value:
       text_line = content_value.string_value
 
-    # if not text_line:
-    #   context.aggregate_to(empty_line_aggregator, 1)
     words = re.findall(r'[A-Za-z\']+', text_line)
-    # for w in words:
-      # context.aggregate_to(average_word_size_aggregator, len(w))
-    return [w.lower() for w in words]
+    stopwords = ['t', 'https', 'co', 'the', 'a', 'to', 'rt', 'and', 'in',
+      'of', 'is', 'it', 's', 'at', 'on', 'for', 'that', 'by', 'are', 'amp',
+      'an', 'so']
+    rwords = []
+    for w in words:
+      # weed out some 'stopwords'
+      if not w.lower() in stopwords:
+        rwords.append(w.lower())
+    return rwords
 
 class URLExtractingDoFn(beam.DoFn):
   """Parse each line of input text into words."""
@@ -169,11 +165,14 @@ def make_query(kind):
     # if namespace is not None:
     # ancestor_key.partition_id.namespace_id = namespace
 
+    days_ago = int(time.time()) - 604,800  # 60 * 60 * 24 * 7
+
     query = query_pb2.Query()
     query.kind.add().name = kind
 
-    # datastore_helper.set_property_filter(
-      # query.filter, '__key__', PropertyFilter.HAS_ANCESTOR, ancestor_key)
+    datastore_helper.set_property_filter(
+      query.filter, 'created_at', PropertyFilter.GREATER_THAN,
+      days_ago)
 
     return query
 
@@ -182,8 +181,8 @@ def read_from_datastore(project, pipeline_options):
   p = beam.Pipeline(options=pipeline_options)
   # Create a query to read entities from datastore.
   query = make_query('Tweet')
-  poutput = 'gs://aju-vtests3-dataflow/output/twoutput'
-  num_shards = 3
+  poutput = 'gs://aju-vtests3-dataflow/output/%s/twoutput' % int(time.time())
+  num_shards = 1
 
   # Read entities from Cloud Datastore into a PCollection.
   lines = p | 'read from datastore' >> ReadFromDatastore(
@@ -196,7 +195,7 @@ def read_from_datastore(project, pipeline_options):
             | 'pair_with_one' >> beam.Map(lambda x: (x, 1))
             | 'group' >> beam.GroupByKey()
             | 'count' >> beam.Map(lambda (word, ones): (word, sum(ones)))
-            | 'top 200' >> combiners.Top.Of(200, lambda x, y: x[1] < y[1])
+            | 'top 300' >> combiners.Top.Of(300, lambda x, y: x[1] < y[1])
             )
 
   url_counts = (lines
@@ -205,32 +204,27 @@ def read_from_datastore(project, pipeline_options):
             | 'urls_pair_with_one' >> beam.Map(lambda x: (x, 1))
             | 'urls_group' >> beam.GroupByKey()
             | 'urls_count' >> beam.Map(lambda (word, ones): (word, sum(ones)))
-            | 'urls_top 200' >> combiners.Top.Of(200, lambda x, y: x[1] < y[1])
+            | 'urls_top 300' >> combiners.Top.Of(300, lambda x, y: x[1] < y[1])
             )
 
   # Format the counts into a PCollection of strings.
-  output = counts | 'format' >> beam.FlatMap(lambda x: ['%s: %s' % (xx[0], xx[1]) for xx in x])
-  url_output = url_counts | 'urls_format' >> beam.FlatMap(lambda x: ['%s: %s' % (xx[0], xx[1]) for xx in x])
+  output = counts | 'format' >> beam.FlatMap(
+      lambda x: ['%s: %s' % (xx[0], xx[1]) for xx in x])
+  url_output = url_counts | 'urls_format' >> beam.FlatMap(
+      lambda x: ['%s: %s' % (xx[0], xx[1]) for xx in x])
 
   # Write the output using a "Write" transform that has side effects.
   # pylint: disable=expression-not-assigned
   output | 'write' >> beam.io.WriteToText(file_path_prefix=poutput,
                                           num_shards=num_shards)
-  url_output | 'urls_write' >> beam.io.WriteToText(file_path_prefix=poutput + 'url',
-                                          num_shards=num_shards)
+  url_output | 'urls_write' >> beam.io.WriteToText(
+      file_path_prefix=poutput + 'url', num_shards=num_shards)
 
   # Actually run the pipeline (all operations above are deferred).
   return p.run()
 
 
-
-# app = webapp2.WSGIApplication([('/', MainPage),
-#                                ('/launchpipe', LaunchPipeline)],
-#                               debug=True)
-
 if __name__ == '__main__':
-    # This is used when running locally. Gunicorn is used to run the
-    # application on Google App Engine. See entrypoint in app.yaml.
     app.run(host='0.0.0.0', port=8080, debug=True)
 
 

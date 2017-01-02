@@ -3,3 +3,7 @@ cron:
   url: /timeline
   schedule: every 17 minutes
   target: default
+- description: launch dataflow pipeline
+  url: /launchpipeline
+  schedule: every 13 hours
+  target: backend
