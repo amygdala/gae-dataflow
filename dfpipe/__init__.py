@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2017 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,22 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-runtime: python27
-api_version: 1
-threadsafe: true
-
-handlers:
-- url: /.*
-  script: main.app
-  login: admin
-
-libraries:
-- name: ssl
-  version: latest
-
-env_variables:
-  CONSUMER_KEY: 'xxxx'
-  CONSUMER_SECRET: 'xxxx'
-  ACCESS_TOKEN: 'xxxx'
-  ACCESS_TOKEN_SECRET: 'xxxx'

@@ -15,9 +15,6 @@
 service: backend
 runtime: custom
 env: flex
-# entrypoint: gunicorn -b :$PORT main_df:app
 
 manual_scaling:
   instances: 1
-
-
