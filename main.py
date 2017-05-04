@@ -17,11 +17,12 @@ The app for the 'frontend' service, which handles cron job requests to
 fetch tweets and store them in the Datastore.
 """
 
+import datetime
 import logging
 import os
 
 from google.appengine.ext import ndb
-import tweepy
+import twitter
 import webapp2
 
 
@@ -45,10 +46,10 @@ class FetchTweets(webapp2.RequestHandler):
     access_token = os.environ['ACCESS_TOKEN']
     access_token_secret = os.environ['ACCESS_TOKEN_SECRET']
 
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    auth.set_access_token(access_token, access_token_secret)
-
-    api = tweepy.API(auth)
+    api = twitter.Api(consumer_key=consumer_key,
+        consumer_secret=consumer_secret,
+        access_token_key=access_token,
+        access_token_secret=access_token_secret)
 
     last_id = None
     public_tweets = None
@@ -66,9 +67,9 @@ class FetchTweets(webapp2.RequestHandler):
     # grab tweets from the home timeline of the auth'd account.
     try:
       if last_id:
-        public_tweets = api.home_timeline(count=200, since_id=last_id)
+        public_tweets = api.GetHomeTimeline(count=200, since_id=last_id)
       else:
-        public_tweets = api.home_timeline(count=20)
+        public_tweets = api.GetHomeTimeline(count=20)
         logging.warning("Could not get last tweet id from datastore.")
     except Exception as e:
       logging.warning("Error getting tweets: %s", e)
@@ -80,13 +81,12 @@ class FetchTweets(webapp2.RequestHandler):
       # logging.info("text: %s, %s", tweet.text, tweet.user.screen_name)
       tw.text = tweet.text
       tw.user = tweet.user.screen_name
-      tw.created_at = tweet.created_at
+      tw.created_at = datetime.datetime.strptime(tweet.created_at, "%a %b %d %H:%M:%S +0000 %Y")
       tw.tid = tweet.id
-      urls = tweet.entities['urls']
+      urls = tweet.urls
       urllist = []
       for u in urls:
-        expanded_url = u['expanded_url']
-        urllist.append(expanded_url)
+        urllist.append(u.expanded_url)
       tw.urls = urllist
       tw.key = ndb.Key(Tweet, tweet.id)
       tw.put()

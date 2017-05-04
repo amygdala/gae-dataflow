@@ -1,2 +1,2 @@
-tweepy
-
+python-twitter
+requests-toolbelt
