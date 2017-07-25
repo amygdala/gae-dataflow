@@ -22,7 +22,7 @@ from __future__ import absolute_import
 import logging
 import os
 
-from apache_beam.utils.pipeline_options import PipelineOptions
+from apache_beam.options.pipeline_options import PipelineOptions
 
 from flask import Flask
 from flask import request
