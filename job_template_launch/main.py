@@ -53,7 +53,7 @@ class LaunchJob(webapp2.RequestHandler):
 
     # Because we're using the same job name each time, if you try to launch one
     # job while another is still running, the second will fail.
-    JOBNAME = PROJECT + '-twcount-template'
+    JOBNAME = PROJECT + '-twproc-template'
 
     credentials = GoogleCredentials.get_application_default()
     service = build('dataflow', 'v1b3', credentials=credentials)

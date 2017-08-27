@@ -12,6 +12,10 @@ as well as do much more.
 The example shows how to periodically launch a Python Dataflow pipeline from GAE, to
 analyze data stored in Cloud Datastore; in this case, tweets from Twitter.
 
+This example uses the Dataflow SDK to launch the pipeline jobs.  Because of its use of the SDK, it requires App Engine Flex.
+For an example that uses the same pipeline, but uses [Dataflow Templates](https://cloud.google.com/dataflow/docs/templates/overview) to launch the pipeline jobs, see the ['job_template_launch'](../job_template_launch) directory, which uses App Engine Standard.
+Now that Dataflow Templates are available, they are likely the more straightforward option for this type of task in most cases, so you may want to start with the ['job_template_launch'](../job_template_launch) directory.
+
 The example is a GAE app with two [services (previously, 'modules')](https://cloud.google.com/appengine/docs/standard/python/an-overview-of-app-engine#services_the_building_blocks_of_app_engine):
 
  - a [GAE Standard](https://cloud.google.com/appengine/docs/standard/) service that periodically pulls in timeline tweets from Twitter and stores them in Datastore; and

@@ -39,7 +39,7 @@ pipeline_options = {
     'setup_file': './setup.py',
     'job_name': PROJECT + '-twcount',
     'temp_location': 'gs://' + BUCKET + '/temp',
-    'template_location': 'gs://' + BUCKET + '/templates/' + PROJECT + '-twcount_tmpl1'
+    'template_location': 'gs://' + BUCKET + '/templates/' + PROJECT + '-twproc_tmpl'
 }
 # define and launch the pipeline (non-blocking), which will create the template.
 pipe.process_datastore_tweets(PROJECT, DATASET,
