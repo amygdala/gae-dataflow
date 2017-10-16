@@ -31,7 +31,6 @@ PROJECT = os.environ['PROJECT']
 BUCKET = os.environ['BUCKET']
 DATASET = os.environ['DATASET']
 
-
 pipeline_options = {
     'project': PROJECT,
     'staging_location': 'gs://' + BUCKET + '/staging',
@@ -42,5 +41,5 @@ pipeline_options = {
     'template_location': 'gs://' + BUCKET + '/templates/' + PROJECT + '-twproc_tmpl'
 }
 # define and launch the pipeline (non-blocking), which will create the template.
-pipe.process_datastore_tweets(PROJECT, DATASET,
-    PipelineOptions.from_dictionary(pipeline_options))
+pipeline_options = PipelineOptions.from_dictionary(pipeline_options)
+pipe.process_datastore_tweets(PROJECT, DATASET, pipeline_options)

@@ -62,6 +62,7 @@ class LaunchJob(webapp2.RequestHandler):
             "jobName": "{jobname}".format(jobname=JOBNAME),
             "gcsPath": "gs://{bucket}/templates/{template}".format(
                 bucket=BUCKET, template=TEMPLATE),
+            "parameters": {"timestamp": str(datetime.datetime.utcnow())},
              "environment": {
                 "tempLocation": "gs://{bucket}/temp".format(bucket=BUCKET),
                 "zone": "us-central1-f"

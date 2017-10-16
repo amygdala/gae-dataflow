@@ -74,10 +74,9 @@ export BUCKET=your-bucket
 export PROJECT=your-project
 ```
 
-Then, symlink the pipeline module from the `sdk_launch` example directory, and run the template creation script:
+Then, run the template creation script:
 
 ```sh
-ln -s ../sdk_launch/dfpipe .
 python create_template.py
 ```
 
