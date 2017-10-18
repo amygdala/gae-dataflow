@@ -40,18 +40,17 @@ from googledatastore import helper as datastore_helper, PropertyFilter
 logging.basicConfig(level=logging.INFO)
 
 class FilterDate(beam.DoFn):
-  """..."""
+  """Filter Tweet datastore entities based on timestamp."""
 
   def __init__(self, opts, days):
-    """...
-    """
     super(FilterDate, self).__init__()
     self.opts = opts
     self.days = days
     self.earlier = None
 
   def start_bundle(self):
-    before = datetime.datetime.strptime(self.opts.timestamp.get(), '%Y-%m-%d %H:%M:%S.%f')
+    before = datetime.datetime.strptime(self.opts.timestamp.get(),
+        '%Y-%m-%d %H:%M:%S.%f')
     self.earlier = before - datetime.timedelta(days=self.days)
 
   def process(self, element):
@@ -60,15 +59,15 @@ class FilterDate(beam.DoFn):
     cav = None
     if created_at:
       cav = created_at.timestamp_value
+      cseconds = cav.seconds
     else:
       return
-    # logging.warn("created_at: %s", cav)
-    cavv = str(cav)[9:]  # this is hacky beyond belief
-    crdt = datetime.datetime.fromtimestamp(int(cavv))
+    crdt = datetime.datetime.fromtimestamp(cseconds)
     logging.warn("crdt: %s", crdt)
-    # earlier = self.before - datetime.timedelta(days=days)
     logging.warn("earlier: %s", self.earlier)
     if crdt > self.earlier:
+      # return only the elements (datastore entities) with a 'created_at' date
+      # within the last self.days days.
       yield element
 
 
@@ -138,41 +137,37 @@ class URLExtractingDoFn(beam.DoFn):
 
 
 class QueryDatastore(beam.PTransform):
-  """...
+  """Generate a Datastore query, then read from the Datastore.
   """
 
-  def __init__(self, project, opts):
-    """...
-    """
+  def __init__(self, project, days):
     super(QueryDatastore, self).__init__()
     self.project = project
-    # self.opts = opts
-    # self.ts = ''
-    # self.before = None
-    # self.earlier = datetime.datetime.now()
-
-  # def start_bundle(self):
-  #   days = 4
-  #   self.ts = self.opts.timestamp.get()
-  #   self.before = datetime.datetime.strptime(self.ts, '%Y-%m-%d %H:%M:%S.%f')
-  #   self.earlier = self.before - datetime.timedelta(days=days)
+    self.days = days
 
 
+  # it's not currently supported to use template runtime value providers for
+  # the Datastore input source, so we can't use runtime values to
+  # construct our query. However, we can still statically filter based on time
+  # of template construction, which lets us make the query a bit more
+  # efficient.
   def expand(self, pcoll):
-    # days = 4
-    # # before = datetime.datetime.now(). # this is static on template build
-    # before = datetime.datetime.strptime(self.ts, '%Y-%m-%d %H:%M:%S.%f')
-    # logging.warn("in QueryDatastore, using timestamp %s", self.before)
-    # earlier = self.before - datetime.timedelta(days=days)
-
     query = query_pb2.Query()
     query.kind.add().name = 'Tweet'
+    now = datetime.datetime.now()
+    # The 'earlier' var will be set to a static value on template creation.
+    # That is, because of the way that templates work, the value is defined
+    # at template compile time, not runtime.
+    # But defining a filter based on this value will still serve to make the
+    # query more efficient than if we didn't filter at all.
+    earlier = now - datetime.timedelta(days=self.days)
+    datastore_helper.set_property_filter(query.filter, 'created_at',
+                                         PropertyFilter.GREATER_THAN,
+                                         earlier)
 
-    # datastore_helper.set_property_filter(query.filter, 'created_at',
-    #                                      PropertyFilter.GREATER_THAN,
-    #                                      self.earlier)
     return (pcoll
-            | 'read from datastore' >> ReadFromDatastore(self.project, query, None))
+            | 'read from datastore' >> ReadFromDatastore(self.project,
+                                                         query, None))
 
 
 class UserOptions(PipelineOptions):
@@ -189,12 +184,14 @@ def process_datastore_tweets(project, dataset, pipeline_options):
   """
 
   user_options = pipeline_options.view_as(UserOptions)
+  DAYS = 4
 
   p = beam.Pipeline(options=pipeline_options)
 
-  # Read entities from Cloud Datastore into a PCollection.
-  lines = (p | QueryDatastore(project, user_options)
-             | beam.ParDo(FilterDate(user_options, 4))
+  # Read entities from Cloud Datastore into a PCollection, then filter to get
+  # only the entities from the last DAYS days.
+  lines = (p | QueryDatastore(project, DAYS)
+             | beam.ParDo(FilterDate(user_options, DAYS))
       )
 
   global_count = AsSingleton(
