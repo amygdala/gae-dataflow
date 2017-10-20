@@ -280,14 +280,17 @@ def process_datastore_tweets(project, dataset, pipeline_options):
 
   # Format the counts into a PCollection of strings.
   wc_records = top_percents | 'format' >> beam.FlatMap(
-      lambda x: [{'word': xx[0], 'percent': xx[1], 'ts': user_options.timestamp.get()} for xx in x])
+      lambda x: [{'word': xx[0], 'percent': xx[1],
+                  'ts': user_options.timestamp.get()} for xx in x])
 
   url_records = url_counts | 'urls_format' >> beam.FlatMap(
-      lambda x: [{'url': xx[0], 'count': xx[1], 'ts': user_options.timestamp.get()} for xx in x])
+      lambda x: [{'url': xx[0], 'count': xx[1],
+                  'ts': user_options.timestamp.get()} for xx in x])
 
   co_records = cooccur_rankings | 'co_format' >> beam.FlatMap(
       lambda x: [{'w1': xx[0][0], 'w2': xx[0][1], 'count': xx[1],
-      'log_weight': xx[2], 'ts': user_options.timestamp.get()} for xx in x])
+                  'log_weight': xx[2],
+                  'ts': user_options.timestamp.get()} for xx in x])
 
   # Write the results to three BigQuery tables.
   wc_records | 'wc_write_bq' >> beam.io.Write(

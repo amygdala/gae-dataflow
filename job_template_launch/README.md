@@ -11,10 +11,9 @@ as well as do much more.
 The example shows how to periodically launch a Python Dataflow pipeline from GAE, to
 analyze data stored in Cloud Datastore; in this case, tweets from Twitter.
 
-This example uses [Dataflow Templates](https://cloud.google.com/dataflow/docs/templates/overview) to launch the pipeline jobs. Since we're just calling the Templates API to launch the jobs, we can use App Engine standard.
+This example uses [Dataflow Templates](https://cloud.google.com/dataflow/docs/templates/overview) to launch the pipeline jobs. Since we're simply calling the Templates REST API to launch the jobs, we can build an App Engine standard app.
 For an example that uses the same pipeline, but uses the Dataflow SDK to launch the pipeline jobs, see the [`sdk_launch`](../sdk_launch) directory.  Because of its use of the SDK, that example requires App Engine Flex.
-
-Now that Dataflow Templates are available, they are likely the more straightforward option for this type of task in most cases. See the Templates documentation for more detail, including information on how you can pass in runtime parameters.
+Now that Dataflow Templates are available for Python Dataflow, they are often the more straightforward option for this type of use case. See the Templates documentation for more detail.
 
 ###  The Dataflow pipeline
 
@@ -74,7 +73,7 @@ export BUCKET=your-bucket
 export PROJECT=your-project
 ```
 
-Then, run the template creation script:
+Then, run the [template creation script](create_template.py):
 
 ```sh
 python create_template.py
@@ -83,6 +82,28 @@ python create_template.py
 Note the resulting template name that is output to the command line. By default it should be:
 `<PROJECT> + '-twproc_tmpl'`, but you can change that in the script if you like.
 
+The template creation script accesses the pipeline definition in [`dfpipe/pipe.py`](dfpipe/pipe.py) to build the template.  As part of the pipeline definition, it's specified that the pipeline takes a runtime argument, `timestamp`.
+
+```python
+class UserOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+      parser.add_value_provider_argument('--timestamp', type=str)
+```
+
+Then, the pipeline code can access that runtime parameter, e.g.:
+
+```python
+  user_options = pipeline_options.view_as(UserOptions)
+  ...
+  wc_records = top_percents | 'format' >> beam.FlatMap(
+      lambda x: [{'word': xx[0], 'percent': xx[1], 
+                  'ts': user_options.timestamp.get()} for xx in x])
+```
+
+#### Optional: test your dataflow pipeline    
+
+[tbd]
 
 ### 6. Edit app.yaml
 

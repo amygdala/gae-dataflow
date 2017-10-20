@@ -20,7 +20,7 @@ RUN pip install --upgrade setuptools
 RUN apt-get install -y curl
 
 # You may later want to change this download as the Cloud SDK version is updated.
-RUN curl https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-175.0.0-linux-x86_64.tar.gz | tar xvz
+RUN curl https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-176.0.0-linux-x86_64.tar.gz | tar xvz
 RUN ./google-cloud-sdk/install.sh -q
 RUN ./google-cloud-sdk/bin/gcloud components install beta
 
