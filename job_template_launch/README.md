@@ -26,6 +26,7 @@ ranking metric.  It writes the results to three BigQuery tables.
 
 <a href="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_df_graph.png" target="_blank"><img src="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_df_graph.png" width=500/></a>
 
+
 ## Prerequisites for running the example
 
 ### 1. Basic GCP setup
@@ -79,10 +80,10 @@ Then, run the [template creation script](create_template.py):
 python create_template.py
 ```
 
-Note the resulting template name that is output to the command line. By default it should be:
+Note the resulting template path and name that is output to the command line. By default the name should be:
 `<PROJECT> + '-twproc_tmpl'`, but you can change that in the script if you like.
 
-The template creation script accesses the pipeline definition in [`dfpipe/pipe.py`](dfpipe/pipe.py) to build the template.  As part of the pipeline definition, it's specified that the pipeline takes a runtime argument, `timestamp`.
+The template creation script accesses the pipeline definition in [`dfpipe/pipe.py`](dfpipe/pipe.py) to build the template.  As part of the pipeline definition, it's specified that the pipeline takes a runtime argument, `timestamp`. (This value is used to filter out tweets N days older than the timestamp, so that the analysis is only run over recent activity).
 
 ```python
 class UserOptions(PipelineOptions):
@@ -97,13 +98,41 @@ Then, the pipeline code can access that runtime parameter, e.g.:
   user_options = pipeline_options.view_as(UserOptions)
   ...
   wc_records = top_percents | 'format' >> beam.FlatMap(
-      lambda x: [{'word': xx[0], 'percent': xx[1], 
+      lambda x: [{'word': xx[0], 'percent': xx[1],
                   'ts': user_options.timestamp.get()} for xx in x])
 ```
 
-#### Optional: test your dataflow pipeline    
+#### Optional sanity check: run your template-based Dataflow pipeline from the Cloud Console
 
-[tbd]
+Now that you've created a pipeline template, you can test it out by launching a job based on that template from the [Cloud Console](https://console.cloud.google.com).  (You could also do this via the `gcloud` command-line tool).
+While it's not strictly necessary to do this prior to deploying your GAE app, it's a good sanity check.
+However, the pipeline won't do anything interesting unless you already have tweet data in the Datastore.  This will be the case if you tried the [previous sdk-based version](../sdk_launch) of this example.
+
+Go to the [Dataflow pane](https://console.cloud.google.com/dataflow) of the Cloud Console, and click on "Create Job From Template".
+
+<figure>
+    <a href="https://storage.googleapis.com/amy-jo/images/job_templates1.png" target="_blank"><img src="https://storage.googleapis.com/amy-jo/images/job_templates1.png" /></a>
+    <figcaption>_Creating a Dataflow job from a template._</figcaption>
+</figure>
+
+Select "Custom Template", then browse to your new template's location in GCS. This info was output when you ran
+`create_template.py`. (The pulldown menu includes some predefined templates as well, that you may want to explore).
+
+<figure>
+    <a href="https://storage.googleapis.com/amy-jo/images/job_templates2.png" target="_blank"><img src="https://storage.googleapis.com/amy-jo/images/job_templates2.png" /></a>
+    <figcaption>_Select "Custom Template", and indicate the path to it._</figcaption>
+</figure>
+
+Finally, set your pipeline's runtime parameter(s). In this case, we have one: `timestamp`. The pipeline is expecting a value in a format like this: `2017-10-22 10:18:13.491543` (you can generate such a string in python via
+`str(datetime.datetime.now())`).
+
+<figure>
+    <a href="https://storage.googleapis.com/amy-jo/images/job_templates3.png" target="_blank"><img src="https://storage.googleapis.com/amy-jo/images/job_templates3.png" /></a>
+    <figcaption>_Set your pipeline's runtime parameter(s) before running the job._</figcaption>
+</figure>
+
+Note that while we don't show it here, [you can extend your templates with additional metadata](https://cloud.google.com/dataflow/docs/templates/creating-templates#metadata) so that custom parameters may be validated when the template is executed.
+
 
 ### 6. Edit app.yaml
 
@@ -111,17 +140,22 @@ Finally, edit `app.yaml`.  Add the Twitter app credentials that you generated ab
 
 Next, add your TEMPLATE name.  By default, it will be `<PROJECT>-twproc_templ`, where `<PROJECT>` is replaced with your project name.
 
-### 7. Deploy the app
+## Deploy the app
 
-Now we're ready to deploy the app.  Deploy both the `app.yaml` spec, and the `cron.yaml` spec:
+Now we're ready to deploy the GAE app.  Deploy the `app.yaml` spec:
 
 ```sh
-gcloud app deploy app.yaml
-gcloud app deploy cron.yaml
+$ gcloud app deploy app.yaml
+```
+
+.. and then the  `cron.yaml` spec:
+
+```sh
+$ gcloud app deploy cron.yaml
 ```
 
 
-## Testing your deployment
+## Test your deployment
 
 To test your deployment, manually trigger the cron jobs.  To do this, go to the
 [cloud console](https://console.cloud.google.com) for your project,
@@ -137,7 +171,8 @@ Console, and select `Tweet` from the 'Entities' pull-down menu. You can also try
 select * from Tweet order by created_at desc
 ```
 
-Once you know that the 'fetch tweets' cron is running successfully, click `Run now` for the
+Once you know that the 'fetch tweets' cron is running successfully and populating the Datastore,
+click `Run now` for the
 `/launchtemplatejob` cron. This should kick off a Dataflow job and return within a few seconds.  You
 should be able to see the job running in the [Dataflow pane](https://console.cloud.google.com/dataflow)
 of the Cloud Console. It should finish in a few minutes. Check that it finishes without error.
@@ -150,3 +185,37 @@ If you see any problems, make sure that you've configured the `app.yaml` as desc
 Note: the `/launchtemplatejob` request handler is configured to return without launching the pipeline
 if the request has not originated as a cron request. You can comment out that logic in `main.py`,
 in the `LaunchJob` class, if you'd like to override that behavior.
+
+## Exploring the analytics results in BigQuery
+
+Once our example app is up and running, it periodically writes the results of its analysis to BigQuery. Then, we can run some fun queries on the data.
+
+For example, we can find recent word co-occurrences that are 'interesting' by our metric:
+
+<a href="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_twitter_bq3.png" target="_blank"><img src="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_twitter_bq3.png" width=500/></a>
+
+Or look for emerging word pairs, that have become 'interesting' in the last day or so (as of early April 2017):
+
+<a href="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_twitter_bq4.png" target="_blank"><img src="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_twitter_bq4.png" width=500/></a>
+
+We can contrast the 'interesting' word pairs with the words that are simply the most popular within a given period (you can see that most of these words are common, but not particularly newsworthy):
+
+<a href="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_wc1.png" target="_blank"><img src="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_wc1.png" width=400/></a>
+
+Or, find the most often-tweeted URLs from the past few days (some URLs are truncated in the output):
+
+<a href="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_urls1.png" target="_blank"><img src="https://amy-jo.storage.googleapis.com/images/gae_dataflow/gae_dataflow_urls1.png" width=500/></a>
+
+
+## What next?
+
+This example walks through how you can programmatically launch Dataflow pipelines — that read from Datastore — directly from your App Engine app, in order to support a range of processing and analytics tasks.
+
+There are lots of interesting ways that this example could be extended. For example, you could add
+a user-facing frontend to the web app, that fetches and displays results from BigQuery. You might
+also look at trends over time (e.g. for bigrams) -- either from BigQuery, or by extending the
+Dataflow pipeline.
+
+## Contributions
+
+Contributions are not currently accepted.  This is not an official Google product.

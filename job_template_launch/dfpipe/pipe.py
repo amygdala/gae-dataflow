@@ -81,6 +81,8 @@ class WordExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
 
     words = set([x.lower() for x in re.findall(r'[A-Za-z\']+', text_line)])
+    # You can add more stopwords if you want.  These words are not included
+    # in the analysis.
     stopwords = [
         'a', 'amp', 'an', 'and', 'are', 'as', 'at', 'be', 'been',
         'but', 'by', 'co', 'do', 'for', 'has', 'have', 'he', 'her', 'his',
@@ -88,8 +90,6 @@ class WordExtractingDoFn(beam.DoFn):
         'or', 'rt', 's', 'she', 'so', 't', 'than', 'that', 'the', 'they',
         'this', 'to', 'us', 'was', 'we', 'what', 'with', 'you', 'your'
         'who', 'when', 'via']
-    # temp
-    stopwords += ['lead', 'scoopit']
     stopwords += list(map(chr, range(97, 123)))
     return list(words - set(stopwords))
 
@@ -106,6 +106,8 @@ class CoOccurExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
 
     words = set([x.lower() for x in re.findall(r'[A-Za-z\']+', text_line)])
+    # You can add more stopwords if you want.  These words are not included
+    # in the analysis.
     stopwords = [
         'a', 'amp', 'an', 'and', 'are', 'as', 'at', 'be', 'been',
         'but', 'by', 'co', 'do', 'for', 'has', 'have', 'he', 'her', 'his',
@@ -113,8 +115,6 @@ class CoOccurExtractingDoFn(beam.DoFn):
         'or', 'rt', 's', 'she', 'so', 't', 'than', 'that', 'the', 'they',
         'this', 'to', 'us', 'was', 'we', 'what', 'with', 'you', 'your',
         'who', 'when', 'via']
-    # temp
-    stopwords += ['lead', 'scoopit']
     stopwords += list(map(chr, range(97, 123)))
     pruned_words = list(words - set(stopwords))
     pruned_words.sort()
@@ -296,7 +296,6 @@ def process_datastore_tweets(project, dataset, pipeline_options):
   wc_records | 'wc_write_bq' >> beam.io.Write(
       beam.io.BigQuerySink(
           '%s:%s.word_counts' % (project, dataset),
-          # '%s:%s.word_countsstr' % (project, dataset),
           schema=generate_wc_schema(),
           create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
           write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND))
@@ -304,7 +303,6 @@ def process_datastore_tweets(project, dataset, pipeline_options):
   url_records | 'urls_write_bq' >> beam.io.Write(
       beam.io.BigQuerySink(
           '%s:%s.urls' % (project, dataset),
-          # '%s:%s.urlsstr' % (project, dataset),
           schema=generate_url_schema(),
           create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
           write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND))
@@ -312,7 +310,6 @@ def process_datastore_tweets(project, dataset, pipeline_options):
   co_records | 'co_write_bq' >> beam.io.Write(
       beam.io.BigQuerySink(
           '%s:%s.word_cooccur' % (project, dataset),
-          # '%s:%s.word_cooccurstr' % (project, dataset),
           schema=generate_cooccur_schema(),
           create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
           write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND))

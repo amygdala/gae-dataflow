@@ -180,7 +180,7 @@ That should kick off the Dataflow pipeline deployment.
 
 ## Exploring the analytics results in BigQuery
 
-Once our example app is up and running, it periodically writes the results of its analysis to BigQuery. Then, we can run some run some fun queries on the data.
+Once our example app is up and running, it periodically writes the results of its analysis to BigQuery. Then, we can run some fun queries on the data.
 
 For example, we can find recent word co-occurrences that are 'interesting' by our metric:
 

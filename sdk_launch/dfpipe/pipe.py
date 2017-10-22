@@ -48,6 +48,8 @@ class WordExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
 
     words = set([x.lower() for x in re.findall(r'[A-Za-z\']+', text_line)])
+    # You can add more stopwords if you want.  These words are not included
+    # in the analysis.
     stopwords = [
         'a', 'amp', 'an', 'and', 'are', 'as', 'at', 'be', 'been',
         'but', 'by', 'co', 'do', 'for', 'has', 'have', 'he', 'her', 'his',
@@ -55,8 +57,6 @@ class WordExtractingDoFn(beam.DoFn):
         'or', 'rt', 's', 'she', 'so', 't', 'than', 'that', 'the', 'they',
         'this', 'to', 'us', 'was', 'we', 'what', 'with', 'you', 'your'
         'who', 'when', 'via']
-    # temp
-    stopwords += ['lead', 'scoopit']
     stopwords += list(map(chr, range(97, 123)))
     return list(words - set(stopwords))
 
@@ -73,6 +73,8 @@ class CoOccurExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
 
     words = set([x.lower() for x in re.findall(r'[A-Za-z\']+', text_line)])
+    # You can add more stopwords if you want.  These words are not included
+    # in the analysis.
     stopwords = [
         'a', 'amp', 'an', 'and', 'are', 'as', 'at', 'be', 'been',
         'but', 'by', 'co', 'do', 'for', 'has', 'have', 'he', 'her', 'his',
@@ -80,8 +82,6 @@ class CoOccurExtractingDoFn(beam.DoFn):
         'or', 'rt', 's', 'she', 'so', 't', 'than', 'that', 'the', 'they',
         'this', 'to', 'us', 'was', 'we', 'what', 'with', 'you', 'your',
         'who', 'when', 'via']
-    # temp
-    stopwords += ['lead', 'scoopit']
     stopwords += list(map(chr, range(97, 123)))
     pruned_words = list(words - set(stopwords))
     pruned_words.sort()
