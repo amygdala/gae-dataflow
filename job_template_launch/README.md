@@ -80,10 +80,13 @@ Then, run the [template creation script](create_template.py):
 python create_template.py
 ```
 
-Note the resulting template path and name that is output to the command line. By default the name should be:
+Note the resulting [Google Cloud Storage (GCS)](https://cloud.google.com/storage/)
+template path that is output to the command line. By default the GCS filename should be:
 `<PROJECT> + '-twproc_tmpl'`, but you can change that in the script if you like.
 
-The template creation script accesses the pipeline definition in [`dfpipe/pipe.py`](dfpipe/pipe.py) to build the template.  As part of the pipeline definition, it's specified that the pipeline takes a runtime argument, `timestamp`. (This value is used to filter out tweets N days older than the timestamp, so that the analysis is only run over recent activity).
+The template creation script accesses the pipeline definition in [`dfpipe/pipe.py`](dfpipe/pipe.py) to build the template.  As part of the pipeline definition, it's specified that the pipeline takes a
+[runtime argument](https://cloud.google.com/dataflow/docs/templates/creating-templates#modifying-your-code-to-use-runtime-parameters),
+`timestamp`. (This value is used to filter out tweets N days older than the timestamp, so that the analysis is only run over recent activity).
 
 ```python
 class UserOptions(PipelineOptions):
@@ -106,7 +109,7 @@ Then, the pipeline code can access that runtime parameter, e.g.:
 
 Now that you've created a pipeline template, you can test it out by launching a job based on that template from the [Cloud Console](https://console.cloud.google.com).  (You could also do this via the `gcloud` command-line tool).
 While it's not strictly necessary to do this prior to deploying your GAE app, it's a good sanity check.
-However, the pipeline won't do anything interesting unless you already have tweet data in the Datastore.  This will be the case if you tried the [previous sdk-based version](../sdk_launch) of this example.
+Note that the pipeline won't do anything interesting unless you already have tweet data in the Datastore.
 
 Go to the [Dataflow pane](https://console.cloud.google.com/dataflow) of the Cloud Console, and click on "Create Job From Template".
 
@@ -133,6 +136,7 @@ Finally, set your pipeline's runtime parameter(s). In this case, we have one: `t
 
 Note that while we don't show it here, [you can extend your templates with additional metadata](https://cloud.google.com/dataflow/docs/templates/creating-templates#metadata) so that custom parameters may be validated when the template is executed.
 
+Once you click 'Run', you should be able to see your job running in the Cloud Console.
 
 ### 6. Edit app.yaml
 
