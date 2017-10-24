@@ -36,7 +36,7 @@ class Tweet(ndb.Model):
 
 
 class FetchTweets(webapp2.RequestHandler):
-  """..."""
+  """Fetch home timeline tweets from the given twitter account."""
 
   def get(self):
 

@@ -30,12 +30,45 @@ from apache_beam.io.gcp.bigquery import parse_table_schema_from_json
 from apache_beam.io.gcp.datastore.v1.datastoreio import ReadFromDatastore
 from apache_beam.pvalue import AsDict
 from apache_beam.pvalue import AsSingleton
+from apache_beam.options.pipeline_options import PipelineOptions
+
 
 from google.cloud.proto.datastore.v1 import query_pb2
 from googledatastore import helper as datastore_helper, PropertyFilter
 
 
 logging.basicConfig(level=logging.INFO)
+
+class FilterDate(beam.DoFn):
+  """Filter Tweet datastore entities based on timestamp."""
+
+  def __init__(self, opts, days):
+    super(FilterDate, self).__init__()
+    self.opts = opts
+    self.days = days
+    self.earlier = None
+
+  def start_bundle(self):
+    before = datetime.datetime.strptime(self.opts.timestamp.get(),
+        '%Y-%m-%d %H:%M:%S.%f')
+    self.earlier = before - datetime.timedelta(days=self.days)
+
+  def process(self, element):
+
+    created_at = element.properties.get('created_at', None)
+    cav = None
+    if created_at:
+      cav = created_at.timestamp_value
+      cseconds = cav.seconds
+    else:
+      return
+    crdt = datetime.datetime.fromtimestamp(cseconds)
+    logging.warn("crdt: %s", crdt)
+    logging.warn("earlier: %s", self.earlier)
+    if crdt > self.earlier:
+      # return only the elements (datastore entities) with a 'created_at' date
+      # within the last self.days days.
+      yield element
 
 
 class WordExtractingDoFn(beam.DoFn):
@@ -48,6 +81,8 @@ class WordExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
 
     words = set([x.lower() for x in re.findall(r'[A-Za-z\']+', text_line)])
+    # You can add more stopwords if you want.  These words are not included
+    # in the analysis.
     stopwords = [
         'a', 'amp', 'an', 'and', 'are', 'as', 'at', 'be', 'been',
         'but', 'by', 'co', 'do', 'for', 'has', 'have', 'he', 'her', 'his',
@@ -55,8 +90,6 @@ class WordExtractingDoFn(beam.DoFn):
         'or', 'rt', 's', 'she', 'so', 't', 'than', 'that', 'the', 'they',
         'this', 'to', 'us', 'was', 'we', 'what', 'with', 'you', 'your'
         'who', 'when', 'via']
-    # temp
-    stopwords += ['lead', 'scoopit']
     stopwords += list(map(chr, range(97, 123)))
     return list(words - set(stopwords))
 
@@ -73,6 +106,8 @@ class CoOccurExtractingDoFn(beam.DoFn):
       text_line = content_value.string_value
 
     words = set([x.lower() for x in re.findall(r'[A-Za-z\']+', text_line)])
+    # You can add more stopwords if you want.  These words are not included
+    # in the analysis.
     stopwords = [
         'a', 'amp', 'an', 'and', 'are', 'as', 'at', 'be', 'been',
         'but', 'by', 'co', 'do', 'for', 'has', 'have', 'he', 'her', 'his',
@@ -80,8 +115,6 @@ class CoOccurExtractingDoFn(beam.DoFn):
         'or', 'rt', 's', 'she', 'so', 't', 'than', 'that', 'the', 'they',
         'this', 'to', 'us', 'was', 'we', 'what', 'with', 'you', 'your',
         'who', 'when', 'via']
-    # temp
-    stopwords += ['lead', 'scoopit']
     stopwords += list(map(chr, range(97, 123)))
     pruned_words = list(words - set(stopwords))
     pruned_words.sort()
@@ -102,22 +135,45 @@ class URLExtractingDoFn(beam.DoFn):
       return links
 
 
-def make_query(kind):
-  """Creates a Cloud Datastore query to retrieve all entities with a
-  'created_at' date > N days ago.
+
+class QueryDatastore(beam.PTransform):
+  """Generate a Datastore query, then read from the Datastore.
   """
-  days = 4
-  now = datetime.datetime.now()
-  earlier = now - datetime.timedelta(days=days)
 
-  query = query_pb2.Query()
-  query.kind.add().name = kind
+  def __init__(self, project, days):
+    super(QueryDatastore, self).__init__()
+    self.project = project
+    self.days = days
 
-  datastore_helper.set_property_filter(query.filter, 'created_at',
-                                       PropertyFilter.GREATER_THAN,
-                                       earlier)
 
-  return query
+  # it's not currently supported to use template runtime value providers for
+  # the Datastore input source, so we can't use runtime values to
+  # construct our query. However, we can still statically filter based on time
+  # of template construction, which lets us make the query a bit more
+  # efficient.
+  def expand(self, pcoll):
+    query = query_pb2.Query()
+    query.kind.add().name = 'Tweet'
+    now = datetime.datetime.now()
+    # The 'earlier' var will be set to a static value on template creation.
+    # That is, because of the way that templates work, the value is defined
+    # at template compile time, not runtime.
+    # But defining a filter based on this value will still serve to make the
+    # query more efficient than if we didn't filter at all.
+    earlier = now - datetime.timedelta(days=self.days)
+    datastore_helper.set_property_filter(query.filter, 'created_at',
+                                         PropertyFilter.GREATER_THAN,
+                                         earlier)
+
+    return (pcoll
+            | 'read from datastore' >> ReadFromDatastore(self.project,
+                                                         query, None))
+
+
+class UserOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+      parser.add_value_provider_argument('--timestamp', type=str)
 
 
 def process_datastore_tweets(project, dataset, pipeline_options):
@@ -126,14 +182,17 @@ def process_datastore_tweets(project, dataset, pipeline_options):
   URLs, ranks word co-occurrences by an 'interestingness' metric (similar to
   on tf* idf).
   """
-  ts = str(datetime.datetime.utcnow())
-  p = beam.Pipeline(options=pipeline_options)
-  # Create a query to read entities from datastore.
-  query = make_query('Tweet')
 
-  # Read entities from Cloud Datastore into a PCollection.
-  lines = (p
-      | 'read from datastore' >> ReadFromDatastore(project, query, None))
+  user_options = pipeline_options.view_as(UserOptions)
+  DAYS = 4
+
+  p = beam.Pipeline(options=pipeline_options)
+
+  # Read entities from Cloud Datastore into a PCollection, then filter to get
+  # only the entities from the last DAYS days.
+  lines = (p | QueryDatastore(project, DAYS)
+             | beam.ParDo(FilterDate(user_options, DAYS))
+      )
 
   global_count = AsSingleton(
       lines
@@ -187,6 +246,7 @@ def process_datastore_tweets(project, dataset, pipeline_options):
           {'name': 'count', 'type': 'INTEGER', 'mode': 'NULLABLE'},
           {'name': 'log_weight', 'type': 'FLOAT', 'mode': 'NULLABLE'},
           {'name': 'ts', 'type': 'TIMESTAMP', 'mode': 'NULLABLE'}]})
+          # {'name': 'ts', 'type': 'STRING', 'mode': 'NULLABLE'}]})
     return parse_table_schema_from_json(json_str)
 
   def generate_url_schema():
@@ -195,6 +255,7 @@ def process_datastore_tweets(project, dataset, pipeline_options):
           {'name': 'url', 'type': 'STRING', 'mode': 'NULLABLE'},
           {'name': 'count', 'type': 'INTEGER', 'mode': 'NULLABLE'},
           {'name': 'ts', 'type': 'TIMESTAMP', 'mode': 'NULLABLE'}]})
+          # {'name': 'ts', 'type': 'STRING', 'mode': 'NULLABLE'}]})
     return parse_table_schema_from_json(json_str)
 
   def generate_wc_schema():
@@ -203,6 +264,7 @@ def process_datastore_tweets(project, dataset, pipeline_options):
           {'name': 'word', 'type': 'STRING', 'mode': 'NULLABLE'},
           {'name': 'percent', 'type': 'FLOAT', 'mode': 'NULLABLE'},
           {'name': 'ts', 'type': 'TIMESTAMP', 'mode': 'NULLABLE'}]})
+          # {'name': 'ts', 'type': 'STRING', 'mode': 'NULLABLE'}]})
     return parse_table_schema_from_json(json_str)
 
   # Now build the rest of the pipeline.
@@ -218,14 +280,17 @@ def process_datastore_tweets(project, dataset, pipeline_options):
 
   # Format the counts into a PCollection of strings.
   wc_records = top_percents | 'format' >> beam.FlatMap(
-      lambda x: [{'word': xx[0], 'percent': xx[1], 'ts': ts} for xx in x])
+      lambda x: [{'word': xx[0], 'percent': xx[1],
+                  'ts': user_options.timestamp.get()} for xx in x])
 
   url_records = url_counts | 'urls_format' >> beam.FlatMap(
-      lambda x: [{'url': xx[0], 'count': xx[1], 'ts': ts} for xx in x])
+      lambda x: [{'url': xx[0], 'count': xx[1],
+                  'ts': user_options.timestamp.get()} for xx in x])
 
   co_records = cooccur_rankings | 'co_format' >> beam.FlatMap(
       lambda x: [{'w1': xx[0][0], 'w2': xx[0][1], 'count': xx[1],
-      'log_weight': xx[2], 'ts': ts} for xx in x])
+                  'log_weight': xx[2],
+                  'ts': user_options.timestamp.get()} for xx in x])
 
   # Write the results to three BigQuery tables.
   wc_records | 'wc_write_bq' >> beam.io.Write(
